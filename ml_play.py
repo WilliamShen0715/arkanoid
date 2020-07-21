@@ -1,6 +1,8 @@
 """
 The template of the main script of the machine learning process
 """
+import os, pickle
+import numpy as np
 
 class MLPlay:
     def __init__(self):
@@ -9,8 +11,10 @@ class MLPlay:
         """
         self.ball_served = False
         self.previous_ball = (0, 0)
-        self.pred = 100
-
+        # Need scikit-learn==0.22.2 
+        with open(os.path.join(os.path.dirname(__file__),'save','model.pickle'), 'rb') as f:
+            self.model = pickle.load(f)
+            
     def update(self, scene_info):
         """
         Generate the command according to the received `scene_info`.
@@ -22,35 +26,25 @@ class MLPlay:
 
         if not self.ball_served:
             self.ball_served = True
-            self.previous_ball = scene_info["ball"]
-            command = "SERVE_TO_RIGHT" # 發球
-            
+            command = "SERVE_TO_LEFT"
         else:
-            # rule code
-            self.pred = 100
-            if self.previous_ball[1]-scene_info["ball"][1] > 0: # 球正在往上
-                pass
-            else :  # 球正在往下，判斷球的落點
-                self.pred = scene_info["ball"][0] + ((400 - scene_info["ball"][1]) // 7 ) * (scene_info["ball"][0]- self.previous_ball[0])
-            
-            # 調整predict值
-            if self.pred > 400:
-                self.pred = self.pred - 400
-            elif self.pred < 400 and self.pred >200 :
-                self.pred = 200 - (self.pred -200 )
-            elif self.pred < -200:
-                self.pred = 200 - (abs(self.pred) - 200)
-            elif self.pred > -200 and self.pred < 0 :
-                self.pred = abs(self.pred)
-
-            # 判斷command
-            if scene_info["platform"][0]+20 - 5 > self.pred :
-                command = "MOVE_LEFT"
-            elif scene_info["platform"][0]+20 + 5 < self.pred : 
-                command = "MOVE_RIGHT"
+            Ball_x = scene_info["ball"][0]
+            Ball_y = scene_info["ball"][1]
+            Ball_speed_x = scene_info["ball"][0] - self.previous_ball[0]
+            Ball_speed_y = scene_info["ball"][1] - self.previous_ball[1]
+            Platform = scene_info["platform"][0]
+            if Ball_speed_x > 0 :
+                if Ball_speed_y > 0:  Direction = 0
+                else :  Direction = 1
             else :
-                command = "NONE"
-
+                if Ball_speed_y > 0:  Direction = 2
+                else :  Direction = 3
+            x = np.array([Ball_x, Ball_y, Direction, Ball_speed_x, Ball_speed_y, Platform]).reshape((1, -1))
+            y = self.model.predict(x)
+            if y == 0: command = "NONE"
+            elif y == -1: command = "MOVE_LEFT"
+            elif y == 1: command = "MOVE_RIGHT"
+            
         self.previous_ball = scene_info["ball"]
         return command
 
